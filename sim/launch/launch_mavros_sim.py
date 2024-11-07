@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
@@ -16,4 +18,16 @@ def generate_launch_description():
                 {'target_component_id': 1}
             ]
         )
+    #     Node(
+    #         package='sim',
+    #         executable='arm_vehicle.py',
+    #         name='arm_vehicle',
+    #         output='screen'
+    #         ),
+    #    Node(
+    #        package='sim',
+    #        executable='set_velocity.py',
+    #        name='set_velocity',
+    #        output='screen',
+    #    )
     ])
