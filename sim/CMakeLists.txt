@@ -37,4 +37,10 @@ install(
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
+install(
+  PROGRAM src/set_velocity.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+
 ament_package()
