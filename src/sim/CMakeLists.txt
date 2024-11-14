@@ -38,7 +38,7 @@ install(
 )
 
 install(
-  PROGRAM src/set_velocity.py
+  PROGRAMS src/set_velocity.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
