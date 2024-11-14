@@ -38,7 +38,7 @@ install(
 )
 
 install(
-  PROGRAMS scripts/arm_vehicle.py src/set_velocity.py
+  PROGRAM src/set_velocity.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
