@@ -20,7 +20,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED) # Added ament_index_cpp
+find_package(mavros_msgs REQUIRED)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
@@ -29,6 +31,8 @@ ament_target_dependencies(waypoint
   std_msgs 
   geometry_msgs # If geometry_msgs is used
   ament_index_cpp # Added ament_index_cpp
+  sensor_msgs
+  mavros_msgs
 )
 
 # Install data directory
