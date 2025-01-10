@@ -48,7 +48,35 @@ public:
         waypoint_timer_ = this->create_wall_timer(200ms, [this]() { publish_waypoint(); });
     }
 
+
 private:
+
+    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscriber_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_publisher_;
+    rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
+    rclcpp::TimerBase::SharedPtr waypoint_timer_;
+    rclcpp::TimerBase::SharedPtr services_timer_;
+
+    double current_latitude_ = 0.0;
+    double current_longitude_ = 0.0;
+
+    double waypoint_latitude = 0.0;
+    double waypoint_longitude = 0.0;
+
+    const double origin_latitude_ = 40.437688;
+    const double origin_longitude_ = -86.944469;
+
+    const double meters_per_degree_ = 111000.0;
+
+    const double offset_latitude = 0.1;
+    const double offset_longitude = 0.1;
+
+
+    vector<double> longitude_vec;  // Vector to store longitudes
+    vector<double> latitude_vec;  // Vector to store latitudes
+
+    int counter = 0;
+
     void change_to_offboard_mode()
     {
         if (!set_mode_client_->wait_for_service(5s)) {
@@ -106,7 +134,7 @@ private:
     void get_next_waypoint()
     {
         // Ensure counter does not exceed vector size
-        if (counter >= latitude_vec.size()) {
+        if (counter >= (int) latitude_vec.size()) {
             RCLCPP_INFO(this->get_logger(), "All waypoints have been processed.");
             waypoint_latitude = 0.0;
             waypoint_longitude = 0.0;
@@ -161,32 +189,6 @@ private:
             return;
         }
     }
-
-    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscriber_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_publisher_;
-    rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
-    rclcpp::TimerBase::SharedPtr waypoint_timer_;
-    rclcpp::TimerBase::SharedPtr services_timer_;
-
-    double current_latitude_ = 0.0;
-    double current_longitude_ = 0.0;
-
-    double waypoint_latitude = 0.0;
-    double waypoint_longitude = 0.0;
-
-    const double origin_latitude_ = 40.437688;
-    const double origin_longitude_ = -86.944469;
-
-    const double meters_per_degree_ = 111000.0;
-
-    const double offset_latitude = 0.1;
-    const double offset_longitude = 0.1;
-
-
-    vector<double> longitude_vec;  // Vector to store longitudes
-    vector<double> latitude_vec;  // Vector to store latitudes
-
-    int counter = 0;
 };
 
 int main(int argc, char *argv[])
