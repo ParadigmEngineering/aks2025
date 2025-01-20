@@ -8,8 +8,10 @@
 #include <iostream>
 #include <cmath>
 
+//std::isfinite(msg->latitude) && std::isfinite(msg->longitude)
 using namespace std;
 using namespace std::chrono_literals;
+using std::placeholders::_1;
 
 class WaypointPublisher : public rclcpp::Node
 {
@@ -17,20 +19,9 @@ public:
     WaypointPublisher() : Node("waypoint_publisher")
     {
         get_coords();
-
         // Subscription to the kart's GPS position
         gps_subscriber_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/mavros/global_position/global", 10,
-            [this](const sensor_msgs::msg::NavSatFix::SharedPtr msg) {
-                if (std::isfinite(msg->latitude) && std::isfinite(msg->longitude)) {
-                    current_latitude_ = msg->latitude;
-                    current_longitude_ = msg->longitude;
-                    RCLCPP_INFO(this->get_logger(), "Current Position: Latitude: %.6f, Longitude: %.6f",
-                                current_latitude_, current_longitude_);
-                } else {
-                    RCLCPP_WARN(this->get_logger(), "Invalid GPS data received. Waiting for valid GPS signal...");
-                }
-            });
+            "/mavros/global_position/global", rclcpp::SensorDataQoS(), std::bind(&WaypointPublisher::gps_callback, this, _1));
 
         // Publisher for waypoints to the MAVROS setpoint topic
         waypoint_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mavros/setpoint_position/local", 10);
@@ -49,6 +40,20 @@ public:
     }
 
 private:
+    void gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
+    {
+        RCLCPP_INFO(this->get_logger(), "Altitude: %.6f", msg->altitude);
+            if (1) {
+                RCLCPP_INFO(this->get_logger(), "got here!!!!");
+                current_latitude_ = msg->latitude;
+                current_longitude_ = msg->longitude;
+                RCLCPP_INFO(this->get_logger(), "Current Position: Latitude: %.6f, Longitude: %.6f",
+                            current_latitude_, current_longitude_);
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Invalid GPS data received. Waiting for valid GPS signal...");
+            }
+    }
+
     void change_to_offboard_mode()
     {
         if (!set_mode_client_->wait_for_service(5s)) {
@@ -83,7 +88,7 @@ private:
 
     void publish_waypoint()
     {
-        RCLCPP_INFO(this->get_logger(), "waypoint_latidtude: %.6f, waypoint_longitude: %.6f", waypoint_latitude, waypoint_longitude);
+        // RCLCPP_INFO(this->get_logger(), "waypoint_latidtude: %.6f, waypoint_longitude: %.6f", waypoint_latitude, waypoint_longitude);
         RCLCPP_INFO(this->get_logger(), "current_latitude: %.6f, current_longitude: %.6f", current_latitude_, current_longitude_);
         
         get_next_waypoint();
@@ -106,7 +111,7 @@ private:
     void get_next_waypoint()
     {
         // Ensure counter does not exceed vector size
-        if (counter >= latitude_vec.size()) {
+        if (counter >= (int) latitude_vec.size()) {
             RCLCPP_INFO(this->get_logger(), "All waypoints have been processed.");
             waypoint_latitude = 0.0;
             waypoint_longitude = 0.0;
