@@ -4,6 +4,7 @@
 #include "mavros_msgs/srv/set_mode.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geographic_msgs/msg/geo_pose_stamped.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include <tf2/LinearMath/Quaternion.h> 
 #include <fstream>
 #include <vector>
@@ -38,6 +39,12 @@ public:
 
         // Start a timer to publish dummy waypoints
         waypoint_timer_ = this->create_wall_timer(200ms, [this]() { publish_waypoint(); });
+
+        // Create external shutdown service
+        shutdown_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "shutdown",
+            std::bind(&WaypointPublisher::shutdown_callback, this, std::placeholders::_1, std::placeholders::_2)
+        );
     }
 
 private:
@@ -49,6 +56,13 @@ private:
         } else {
             RCLCPP_WARN(this->get_logger(), "Invalid GPS data received. Waiting for valid GPS signal...");
         }
+    }
+
+    void shutdown_callback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        rclcpp::shutdown();
     }
 
     void change_to_offboard_mode()
@@ -202,6 +216,7 @@ private:
     rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
     rclcpp::TimerBase::SharedPtr waypoint_timer_;
     rclcpp::TimerBase::SharedPtr services_timer_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr shutdown_service_;
 
     double current_latitude_ = 0.0;
     double current_longitude_ = 0.0;

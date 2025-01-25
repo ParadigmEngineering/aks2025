@@ -23,16 +23,18 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED) # Added ament_index_cpp
 find_package(mavros_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
-ament_target_dependencies(waypoint 
+ament_target_dependencies(waypoint
   rclcpp 
   std_msgs 
   geometry_msgs # If geometry_msgs is used
   ament_index_cpp # Added ament_index_cpp
   sensor_msgs
   mavros_msgs
+  std_srvs
 )
 
 # Install data directory
@@ -43,6 +45,10 @@ install(DIRECTORY data/
 # Install the executable
 install(TARGETS
   waypoint
+  DESTINATION lib/${PROJECT_NAME})
+
+install(PROGRAMS
+  src/teleop.py
   DESTINATION lib/${PROJECT_NAME})
 
 # Enable testing
