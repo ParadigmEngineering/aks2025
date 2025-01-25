@@ -106,7 +106,7 @@ private:
     void get_next_waypoint()
     {
         // Ensure counter does not exceed vector size
-        if (counter >= latitude_vec.size()) {
+        if (counter >= (int) latitude_vec.size()) {
             RCLCPP_INFO(this->get_logger(), "All waypoints have been processed.");
             waypoint_latitude = 0.0;
             waypoint_longitude = 0.0;
