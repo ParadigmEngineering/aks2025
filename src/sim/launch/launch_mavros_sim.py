@@ -22,10 +22,10 @@ def generate_launch_description():
                 {'target_system_id': 1},
                 {'target_component_id': 1}
             ]
-        ),
-        ExecuteProcess(
-            cmd=["/bin/bash", path + "/arm_vehicle.sh"],
-            shell=True,
-            output="screen"
         )
+        # ExecuteProcess(
+        #     cmd=["/bin/bash", path + "/arm_vehicle.sh"],
+        #     shell=True,
+        #     output="screen"
+        # )
     ])
