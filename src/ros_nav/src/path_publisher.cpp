@@ -92,12 +92,12 @@ private:
         // double waypoint_x = (waypoint_latitude - origin_latitude_) * meters_per_degree_;
         // double waypoint_y = (waypoint_longitude - origin_longitude_) * meters_per_degree_;
 
-        // Calculate heading
-        double heading = calculate_heading(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude);
+        // // Calculate heading
+        // double heading = calculate_heading(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude);
 
-        // Convert heading to quaternion
-        tf2::Quaternion quaternion;
-        quaternion.setRPY(0, 0, heading); // Roll and pitch are 0; yaw is the heading
+        // // Convert heading to quaternion
+        // tf2::Quaternion quaternion;
+        // quaternion.setRPY(0, 0, heading); // Roll and pitch are 0; yaw is the heading
 
         // Set message values
         auto waypoint_msg = geographic_msgs::msg::GeoPoseStamped();
@@ -106,10 +106,10 @@ private:
         waypoint_msg.pose.position.latitude = waypoint_latitude;
         waypoint_msg.pose.position.longitude = waypoint_longitude;
         waypoint_msg.pose.position.altitude = 0.0; // Assuming ground-level operation
-        waypoint_msg.pose.orientation.x = quaternion.x();
-        waypoint_msg.pose.orientation.y = quaternion.y();
-        waypoint_msg.pose.orientation.z = quaternion.z();
-        waypoint_msg.pose.orientation.w = quaternion.w();
+        // waypoint_msg.pose.orientation.x = quaternion.x();
+        // waypoint_msg.pose.orientation.y = quaternion.y();
+        // waypoint_msg.pose.orientation.z = quaternion.z();
+        // waypoint_msg.pose.orientation.w = quaternion.w();
 
         RCLCPP_INFO(this->get_logger(), "Publishing Waypoint: latitude: %.2f, longitude: %.2f, current counter = %d", waypoint_latitude, waypoint_longitude, counter);
         waypoint_publisher_->publish(waypoint_msg);
@@ -141,12 +141,12 @@ private:
     void get_next_waypoint()
     {
         // Ensure counter does not exceed vector size
-        if (counter >= (int) latitude_vec.size()) {
-            RCLCPP_INFO(this->get_logger(), "All waypoints have been processed.");
-            waypoint_latitude = 0.0;
-            waypoint_longitude = 0.0;
-            return;
-        }
+        // if (counter >= (int) latitude_vec.size()) {
+        //     RCLCPP_INFO(this->get_logger(), "All waypoints have been processed.");
+        //     waypoint_latitude = 0.0;
+        //     waypoint_longitude = 0.0;
+        //     return;
+        // }
         double latitude_differential = abs(waypoint_latitude - current_latitude_);
         double longitude_differential = abs(waypoint_longitude - current_longitude_);
         RCLCPP_INFO(this->get_logger(), "latitude_differential = %.6f, longitude_differential = %.6f", latitude_differential, longitude_differential);
@@ -157,6 +157,7 @@ private:
             RCLCPP_INFO(this->get_logger(), "Updating to next waypoint: Latitude: %.6f, Longitude: %.6f",
                         waypoint_latitude, waypoint_longitude);
             counter++;
+            counter %= latitude_vec.size();
         }
     }
 
@@ -164,8 +165,8 @@ private:
     {
         // Get the path to the package's share directory
         std::string package_share_path = ament_index_cpp::get_package_share_directory("ros_nav");
-        std::string latitude_file_path = package_share_path + "/data/latitudes.txt";
-        std::string longitude_file_path = package_share_path + "/data/longitudes.txt";
+        std::string latitude_file_path = package_share_path + "/data/latitudes_minimal.txt";
+        std::string longitude_file_path = package_share_path + "/data/longitudes_minimal.txt";
 
         // Read latitudes from file
         ifstream read_latitude(latitude_file_path);
