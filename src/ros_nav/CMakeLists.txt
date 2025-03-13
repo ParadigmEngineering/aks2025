@@ -43,7 +43,13 @@ install(DIRECTORY data/
 # Install the executable
 install(TARGETS
   waypoint
-  DESTINATION lib/${PROJECT_NAME})
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  PROGRAMS src/waypoint_nav.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Enable testing
 if(BUILD_TESTING)
