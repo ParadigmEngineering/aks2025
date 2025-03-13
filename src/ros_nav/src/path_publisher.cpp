@@ -44,6 +44,8 @@ private:
     void gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
     {
         if (isfinite(msg->latitude) && isfinite(msg->longitude)) {
+            last_kart_latitude = current_latitude_;
+            last_kart_longitude = current_longitude_;
             current_latitude_ = msg->latitude;
             current_longitude_ = msg->longitude;
         } else {
@@ -93,7 +95,7 @@ private:
         // double waypoint_y = (waypoint_longitude - origin_longitude_) * meters_per_degree_;
 
         // Calculate heading
-        double heading = calculate_heading(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude);
+        double heading = calculate_waypoints_angle(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude, next_waypoint_latitude, next_waypoint_longitude, last_kart_latitude, last_kart_longitude, last_waypoint_latitude, last_waypoint_longitude);
 
         // Convert heading to quaternion
         tf2::Quaternion quaternion;
@@ -112,29 +114,58 @@ private:
         waypoint_msg.pose.orientation.w = quaternion.w();
 
         RCLCPP_INFO(this->get_logger(), "Publishing Waypoint: latitude: %.2f, longitude: %.2f, current counter = %d", waypoint_latitude, waypoint_longitude, counter);
+        RCLCPP_INFO(this->get_logger(), "Heading: %.2f", heading);
         waypoint_publisher_->publish(waypoint_msg);
     }
 
-    double calculate_heading(double lat1, double lon1, double lat2, double lon2)
+    double calculate_waypoints_angle(double cur_lat, double cur_lon, double way_lat, double way_lon, double way_next_lat, double way_next_lon, double last_kart_lat, double last_kart_lon, double last_way_lat, double last_way_lon)
     {
-        // Convert degrees to radians
-        lat1 = lat1 * M_PI / 180.0;
-        lon1 = lon1 * M_PI / 180.0;
-        lat2 = lat2 * M_PI / 180.0;
-        lon2 = lon2 * M_PI / 180.0;
 
-        double dlon = lon2 - lon1;
+        // testing euclidan distance buffer to point
+        // double next_dist = sqrt(pow(cur_lat - way_lat,2) + pow(cur_lon - way_lon, 2));
+        // double last_dist = sqrt(pow(cur_lat - last_way_lat,2) + pow(cur_lon - last_way_lon, 2));
+        // RCLCPP_INFO(this->get_logger(), "way_lat: %.8f, way_lon: %8.f", way_lat, way_lon);
+        // RCLCPP_INFO(this->get_logger(), "last_way_lat: %.8f, last_way_lon: %8.f", last_way_lat, last_way_lon);
+        // RCLCPP_INFO(this->get_logger(), "Euclidan next_dist: %.8f", next_dist);
+        // RCLCPP_INFO(this->get_logger(), "Euclidan last_dist: %.8f", last_dist);
+        // Numbers arbitrary choice of distance by inspection
+        // if (next_dist > 0.0003 && last_dist < 0.00015){
+        //     return 0;
+        // }
 
-        // Calculate the heading in radians
-        double y = sin(dlon) * cos(lat2);
-        double x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon);
-        double heading = atan2(y, x);
+        double way_vec_lon = (way_next_lon - way_lon);
+        double way_vec_lat = (way_next_lat - way_lat);
 
-        // Normalize the heading to [0, 2π)
-        if (heading < 0) {
+        double kart_vec_lon = (cur_lon - last_kart_lon);
+        double kart_vec_lat = (cur_lat - last_kart_lat);
+
+        double wayCrossKart_norm = abs((way_vec_lon*kart_vec_lat) - (way_vec_lat*kart_vec_lon));
+
+        // cos (theta) = (a dot b)/(|a|*|b|)
+        // sin (theta) = (|a x b|)/(|a|*|b|)
+        double heading = atan2(wayCrossKart_norm, (way_vec_lon*kart_vec_lon + way_vec_lat*kart_vec_lat));
+
+        // Normalize the heading to [-pi, pi)
+        if (heading < - M_PI) {
             heading += 2 * M_PI;
         }
+        else if (heading >= M_PI){
+            heading -= 2 * M_PI;
+        }
+        if (heading < -M_PI/2){
+            heading = -M_PI/2;
+        }
+        else if (heading >= M_PI/2){
+            heading = M_PI/2;
+        }
 
+        if ((way_lat > cur_lat && way_lon < cur_lon)||(way_lat < cur_lat && way_lon > cur_lon)){
+            heading = -heading;
+        }
+
+        // if (abs(heading) < 0.1){
+        //     heading = 0;
+        // }
         return heading;
     }
 
@@ -154,9 +185,14 @@ private:
         if ((waypoint_latitude == 0.0 && waypoint_longitude == 0.0) || (latitude_differential < offset_latitude && longitude_differential < offset_longitude)) {
             waypoint_latitude = latitude_vec[counter];
             waypoint_longitude = longitude_vec[counter];
+            next_waypoint_latitude = latitude_vec[counter+1];
+            next_waypoint_longitude = longitude_vec[counter+1];
+            last_waypoint_latitude = latitude_vec[counter-1];
+            last_waypoint_longitude = longitude_vec[counter-1];
             RCLCPP_INFO(this->get_logger(), "Updating to next waypoint: Latitude: %.6f, Longitude: %.6f",
                         waypoint_latitude, waypoint_longitude);
             counter++;
+            counter %= latitude_vec.size();
         }
     }
 
@@ -164,8 +200,10 @@ private:
     {
         // Get the path to the package's share directory
         std::string package_share_path = ament_index_cpp::get_package_share_directory("ros_nav");
-        std::string latitude_file_path = package_share_path + "/data/latitudes.txt";
-        std::string longitude_file_path = package_share_path + "/data/longitudes.txt";
+        std::string latitude_file_path = package_share_path + "/data/latitudes_minimal.txt";
+        std::string longitude_file_path = package_share_path + "/data/longitudes_minimal.txt";
+        std::string spline_lat_file_path = package_share_path + "/data/latitudes_spline.txt";
+        std::string spline_lon_file_path = package_share_path + "/data/longitudes_spline.txt";
 
         // Read latitudes from file
         ifstream read_latitude(latitude_file_path);
@@ -190,9 +228,38 @@ private:
         }
         read_longitude.close();
 
+        // Read spline latitudes from file
+        ifstream read_spline_lat(spline_lat_file_path);
+        if (!read_spline_lat.is_open()) {
+            RCLCPP_ERROR(this->get_logger(), "Error: Unable to open %s", spline_lat_file_path.c_str());
+            return;
+        }
+        while (read_spline_lat >> value) {
+            spline_lat_vec.push_back(value);
+        }
+        read_spline_lat.close();
+
+        // Read spline longitudes from file
+        ifstream read_spline_lon(spline_lon_file_path);
+        if (!read_spline_lon.is_open()) {
+            RCLCPP_ERROR(this->get_logger(), "Error: Unable to open %s", spline_lon_file_path.c_str());
+            return;
+        }
+
+        while (read_spline_lon >> value) {
+            spline_lon_vec.push_back(value);
+        }
+        read_spline_lon.close();
+
         // Check if latitude and longitude vectors are the same size
         if (latitude_vec.size() != longitude_vec.size()) {
             RCLCPP_ERROR(this->get_logger(), "Error: Latitude and Longitude vectors are not of equal size.");
+            return;
+        }
+
+        // Check if latitude and longitude vectors are the same size
+        if (spline_lat_vec.size() != spline_lon_vec.size()) {
+            RCLCPP_ERROR(this->get_logger(), "Error: Spline Latitude and Longitude vectors are not of equal size.");
             return;
         }
     }
@@ -206,8 +273,17 @@ private:
     double current_latitude_ = 0.0;
     double current_longitude_ = 0.0;
 
+    double last_kart_latitude = 0.0;
+    double last_kart_longitude = 0.0;
+
     double waypoint_latitude = 0.0;
     double waypoint_longitude = 0.0;
+
+    double next_waypoint_latitude = 0.0;
+    double next_waypoint_longitude = 0.0;
+
+    double last_waypoint_latitude = 0.0;
+    double last_waypoint_longitude = 0.0;
 
     const double origin_latitude_ = 40.437688;
     const double origin_longitude_ = -86.944469;
@@ -220,6 +296,8 @@ private:
 
     vector<double> longitude_vec;  // Vector to store longitudes
     vector<double> latitude_vec;  // Vector to store latitudes
+    vector<double> spline_lon_vec;
+    vector<double> spline_lat_vec;
 
     int counter = 0;
 };
