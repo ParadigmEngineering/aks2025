@@ -26,12 +26,18 @@ find_package(mavros_msgs REQUIRED)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
+add_executable(rc_simulator src/rc_simulator.cpp)
 ament_target_dependencies(waypoint 
   rclcpp 
   std_msgs 
   geometry_msgs # If geometry_msgs is used
   ament_index_cpp # Added ament_index_cpp
   sensor_msgs
+  mavros_msgs
+)
+ament_target_dependencies(rc_simulator 
+  rclcpp 
+  std_msgs 
   mavros_msgs
 )
 
@@ -43,6 +49,7 @@ install(DIRECTORY data/
 # Install the executable
 install(TARGETS
   waypoint
+  rc_simulator
   DESTINATION lib/${PROJECT_NAME})
 
 # Enable testing

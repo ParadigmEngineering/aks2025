@@ -2,6 +2,7 @@
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "mavros_msgs/srv/set_mode.hpp"
+#include "mavros_msgs/msg/rc_in.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geographic_msgs/msg/geo_pose_stamped.hpp"
 #include <tf2/LinearMath/Quaternion.h> 
@@ -19,28 +20,52 @@ class WaypointPublisher : public rclcpp::Node
 public:
     WaypointPublisher() : Node("waypoint_publisher")
     {
-        get_coords();
-        // Subscription to the kart's GPS position
-        gps_subscriber_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/mavros/global_position/global", rclcpp::SensorDataQoS(), std::bind(&WaypointPublisher::gps_callback, this, _1));
+        // Subscribe to the control mode (RC/Autonomous)
+        control_mode_subscriber_ = this->create_subscription<mavros_msgs::msg::RCIn>(
+            "/mavros/rc/in", rclcpp::SensorDataQoS(), 
+            std::bind(&WaypointPublisher::control_mode_callback, this, _1));
 
-        // Publisher for waypoints to the MAVROS setpoint topic
-        waypoint_publisher_ = this->create_publisher<geographic_msgs::msg::GeoPoseStamped>("/mavros/setpoint_position/global", 10);
-
-        // Create the service client to change the mode
-        set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>("/mavros/set_mode");
-
-        // Change the mode to OFFBOARD after a delay
-        services_timer_ = this->create_wall_timer(3s, [this]() {
-            RCLCPP_INFO(this->get_logger(), "Initiating OFFBOARD mode...");
-            change_to_offboard_mode();
-        });
-
-        // Start a timer to publish dummy waypoints
-        waypoint_timer_ = this->create_wall_timer(200ms, [this]() { publish_waypoint(); });
+        RCLCPP_INFO(this->get_logger(), "Waypoint Publisher Node Initialized. Waiting for control mode...");
     }
 
+
 private:
+void control_mode_callback(const mavros_msgs::msg::RCIn::SharedPtr msg)
+{
+    if (msg->channels[5] == 1500) {
+        if (is_autonomous) {
+            RCLCPP_INFO(this->get_logger(), "Switching to RC mode. Stopping Autonomous Mode.");
+            waypoint_timer_->cancel(); // Stop waypoint publishing
+            services_timer_->cancel(); // Stop mode-changing service
+        }
+        is_autonomous = false;
+        RCLCPP_INFO(this->get_logger(), "Kart is in RC mode");
+    } 
+    else if (msg->channels[5] == 2000) {
+        if (!is_autonomous) {  // Only start if it's the first time switching to Autonomous mode
+            is_autonomous = true;
+            RCLCPP_INFO(this->get_logger(), "Going Autonomous!");
+            
+            // Start autonomous processes when mode is switched
+            get_coords();
+            gps_subscriber_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
+                "/mavros/global_position/global", rclcpp::SensorDataQoS(),
+                std::bind(&WaypointPublisher::gps_callback, this, _1));
+
+            waypoint_publisher_ = this->create_publisher<geographic_msgs::msg::GeoPoseStamped>(
+                "/mavros/setpoint_position/global", 10);
+
+            set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>("/mavros/set_mode");
+
+            services_timer_ = this->create_wall_timer(3s, [this]() {
+                RCLCPP_INFO(this->get_logger(), "Initiating OFFBOARD mode...");
+                change_to_offboard_mode();
+            });
+
+            waypoint_timer_ = this->create_wall_timer(200ms, [this]() { publish_waypoint(); });
+        }
+    }
+}
     void gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
     {
         if (isfinite(msg->latitude) && isfinite(msg->longitude)) {
@@ -85,7 +110,7 @@ private:
 
     void publish_waypoint()
     {
-        // RCLCPP_INFO(this->get_logger(), "waypoint_latidtude: %.6f, waypoint_longitude: %.6f", waypoint_latitude, waypoint_longitude);
+        // RCLCPP_INFO(this->get_logger(), "waypoint_latitude: %.6f, waypoint_longitude: %.6f", waypoint_latitude, waypoint_longitude);
         
         get_next_waypoint();
         // Convert GPS (latitude, longitude) to a local coordinate system
@@ -198,6 +223,7 @@ private:
     }
 
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscriber_;
+    rclcpp::Subscription<mavros_msgs::msg::RCIn>::SharedPtr control_mode_subscriber_;
     rclcpp::Publisher<geographic_msgs::msg::GeoPoseStamped>::SharedPtr waypoint_publisher_;
     rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
     rclcpp::TimerBase::SharedPtr waypoint_timer_;
@@ -222,6 +248,7 @@ private:
     vector<double> latitude_vec;  // Vector to store latitudes
 
     int counter = 0;
+    bool is_autonomous = false;
 };
 
 int main(int argc, char *argv[])
