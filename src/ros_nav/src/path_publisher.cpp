@@ -5,6 +5,7 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geographic_msgs/msg/geo_pose_stamped.hpp"
 #include <tf2/LinearMath/Quaternion.h> 
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <fstream>
 #include <vector>
 #include <iostream>
@@ -27,6 +28,9 @@ public:
         // Publisher for waypoints to the MAVROS setpoint topic
         waypoint_publisher_ = this->create_publisher<geographic_msgs::msg::GeoPoseStamped>("/mavros/setpoint_position/global", 10);
 
+        heading_subscriber_ = this->create_subscription<geographic_msgs::msg::GeoPoseStamped>(
+            "/mavros/setpoint_position/global", rclcpp::SensorDataQoS(), std::bind(&WaypointPublisher::heading_callback, this, _1));
+
         // Create the service client to change the mode
         set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>("/mavros/set_mode");
 
@@ -48,9 +52,23 @@ private:
             last_kart_longitude = current_longitude_;
             current_latitude_ = msg->latitude;
             current_longitude_ = msg->longitude;
+
         } else {
             RCLCPP_WARN(this->get_logger(), "Invalid GPS data received. Waiting for valid GPS signal...");
         }
+    }
+
+    void heading_callback(const geographic_msgs::msg::GeoPoseStamped::SharedPtr msg)
+    {
+        const auto& orientation = msg->pose.orientation;
+        
+        // Convert quaternion to RPY angles
+        tf2::Quaternion tf_quat;
+        tf2::fromMsg(orientation, tf_quat);
+        
+        double roll, pitch, yaw;
+        tf2::Matrix3x3(tf_quat).getRPY(roll, pitch, yaw);
+        current_heading_ = yaw;
     }
 
     void change_to_offboard_mode()
@@ -95,7 +113,7 @@ private:
         // double waypoint_y = (waypoint_longitude - origin_longitude_) * meters_per_degree_;
 
         // Calculate heading
-        double heading = calculate_waypoints_angle(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude, next_waypoint_latitude, next_waypoint_longitude, last_kart_latitude, last_kart_longitude, last_waypoint_latitude, last_waypoint_longitude);
+        double heading = calculate_waypoints_angle(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude, next_waypoint_latitude, next_waypoint_longitude, last_kart_latitude, last_kart_longitude, last_waypoint_latitude, last_waypoint_longitude, next2_waypoint_latitude, next2_waypoint_longitude);
 
         // Convert heading to quaternion
         tf2::Quaternion quaternion;
@@ -118,7 +136,18 @@ private:
         waypoint_publisher_->publish(waypoint_msg);
     }
 
-    double calculate_waypoints_angle(double cur_lat, double cur_lon, double way_lat, double way_lon, double way_next_lat, double way_next_lon, double last_kart_lat, double last_kart_lon, double last_way_lat, double last_way_lon)
+    double normalize_angle(double angle){
+        if (angle < - M_PI) {
+            angle += 2 * M_PI;
+        }
+        else if (angle >= M_PI){
+            angle -= 2 * M_PI;
+        }
+        return angle;
+    }
+
+
+    double calculate_waypoints_angle(double cur_lat, double cur_lon, double way_lat, double way_lon, double way_next_lat, double way_next_lon, double last_kart_lat, double last_kart_lon, double last_way_lat, double last_way_lon, double way_next2_lat, double way_next2_lon)
     {
 
         // testing euclidan distance buffer to point
@@ -133,39 +162,50 @@ private:
         //     return 0;
         // }
 
-        double way_vec_lon = (way_next_lon - way_lon);
-        double way_vec_lat = (way_next_lat - way_lat);
+        // double way_vec_lon = (way_next_lon - way_lon);
+        // double way_vec_lat = (way_next_lat - way_lat);
 
-        double kart_vec_lon = (cur_lon - last_kart_lon);
-        double kart_vec_lat = (cur_lat - last_kart_lat);
+        // double kart_vec_lon = (cur_lon - last_kart_lon);
+        // double kart_vec_lat = (cur_lat - last_kart_lat);
 
-        double wayCrossKart_norm = abs((way_vec_lon*kart_vec_lat) - (way_vec_lat*kart_vec_lon));
+        // double next_vec_lon = (way_next2_lon - way_next_lon);
+        // double next_vec_lat = (way_next2_lon - way_next_lat);
 
-        // cos (theta) = (a dot b)/(|a|*|b|)
-        // sin (theta) = (|a x b|)/(|a|*|b|)
-        double heading = atan2(wayCrossKart_norm, (way_vec_lon*kart_vec_lon + way_vec_lat*kart_vec_lat));
+        // double wayCrossKart_norm = abs((way_vec_lon*kart_vec_lat) - (way_vec_lat*kart_vec_lon));
 
-        // Normalize the heading to [-pi, pi)
-        if (heading < - M_PI) {
-            heading += 2 * M_PI;
-        }
-        else if (heading >= M_PI){
-            heading -= 2 * M_PI;
-        }
+
+        // // cos (theta) = (a dot b)/(|a|*|b|)
+        // // sin (theta) = (|a x b|)/(|a|*|b|)
+        // double heading = atan2(wayCrossKart_norm, (way_vec_lon*kart_vec_lon + way_vec_lat*kart_vec_lat));
+
+        // // Normalize the heading to [-pi, pi)
+        // heading = normalize_angle(heading);
+
+        // if (heading < -M_PI/2){
+        //     heading = -M_PI/2;
+        // }
+        // else if (heading >= M_PI/2){
+        //     heading = M_PI/2;
+        // }
+
+        // if ((way_lat > cur_lat && way_lon < cur_lon)||(way_lat < cur_lat && way_lon > cur_lon)){
+        //     heading = -heading;
+        // }
+
+        // could have lat-lon x-y switched up
+        double alpha = atan2(way_lon-cur_lon, way_lat-cur_lat) - current_heading_;
+        alpha = normalize_angle(alpha);
+        double beta = atan2(way_next2_lon-way_next_lon, way_next2_lat-way_next_lat) - (current_heading_ + alpha);
+        beta = normalize_angle(beta);
+        double K_alpha = 1.0;
+        double K_beta = -1.0;
+        double heading = ((K_alpha * alpha) + (K_beta * beta));
         if (heading < -M_PI/2){
             heading = -M_PI/2;
         }
         else if (heading >= M_PI/2){
             heading = M_PI/2;
         }
-
-        if ((way_lat > cur_lat && way_lon < cur_lon)||(way_lat < cur_lat && way_lon > cur_lon)){
-            heading = -heading;
-        }
-
-        // if (abs(heading) < 0.1){
-        //     heading = 0;
-        // }
         return heading;
     }
 
@@ -186,7 +226,9 @@ private:
             waypoint_latitude = latitude_vec[counter];
             waypoint_longitude = longitude_vec[counter];
             next_waypoint_latitude = latitude_vec[counter+1];
-            next_waypoint_longitude = longitude_vec[counter+1];
+            next_waypoint_longitude = longitude_vec[counter+2];
+            next2_waypoint_latitude = latitude_vec[counter+2];
+            next2_waypoint_longitude = longitude_vec[counter+1];
             last_waypoint_latitude = latitude_vec[counter-1];
             last_waypoint_longitude = longitude_vec[counter-1];
             RCLCPP_INFO(this->get_logger(), "Updating to next waypoint: Latitude: %.6f, Longitude: %.6f",
@@ -266,6 +308,7 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gps_subscriber_;
     rclcpp::Publisher<geographic_msgs::msg::GeoPoseStamped>::SharedPtr waypoint_publisher_;
+    rclcpp::Subscription<geographic_msgs::msg::GeoPoseStamped>::SharedPtr heading_subscriber_;
     rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
     rclcpp::TimerBase::SharedPtr waypoint_timer_;
     rclcpp::TimerBase::SharedPtr services_timer_;
@@ -282,8 +325,13 @@ private:
     double next_waypoint_latitude = 0.0;
     double next_waypoint_longitude = 0.0;
 
+    double next2_waypoint_latitude = 0.0;
+    double next2_waypoint_longitude = 0.0;
+
     double last_waypoint_latitude = 0.0;
     double last_waypoint_longitude = 0.0;
+
+    double current_heading_ = 0.0;
 
     const double origin_latitude_ = 40.437688;
     const double origin_longitude_ = -86.944469;

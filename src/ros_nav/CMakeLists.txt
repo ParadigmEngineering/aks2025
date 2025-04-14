@@ -23,10 +23,23 @@ find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED) # Added ament_index_cpp
 find_package(mavros_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
 ament_target_dependencies(waypoint 
+  rclcpp 
+  std_msgs 
+  geometry_msgs # If geometry_msgs is used
+  ament_index_cpp # Added ament_index_cpp
+  sensor_msgs
+  mavros_msgs
+  tf2_geometry_msgs
+)
+
+# Add executable
+add_executable(topic_data src/topic_data.cpp)
+ament_target_dependencies(topic_data
   rclcpp 
   std_msgs 
   geometry_msgs # If geometry_msgs is used
@@ -43,6 +56,7 @@ install(DIRECTORY data/
 # Install the executable
 install(TARGETS
   waypoint
+  topic_data
   DESTINATION lib/${PROJECT_NAME}
 )
 
