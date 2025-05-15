@@ -24,6 +24,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED) # Added ament_index_cpp
 find_package(mavros_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Core)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
@@ -48,15 +49,41 @@ ament_target_dependencies(topic_data
   mavros_msgs
 )
 
+# Add executable
+add_executable(topicsUI src/topicsUI.cpp)
+ament_target_dependencies(topic_data
+  rclcpp 
+  std_msgs 
+  geometry_msgs # If geometry_msgs is used
+  ament_index_cpp # Added ament_index_cpp
+  sensor_msgs
+  mavros_msgs
+)
+
 # Install data directory
 install(DIRECTORY data/
   DESTINATION share/${PROJECT_NAME}/data
+)
+
+include_directories(
+  include
+  ${Qt5Widgets_INCLUDE_DIRS}
+)
+
+# Link libraries using modern CMake syntax
+target_link_libraries(topicsUI
+  Qt5::Widgets
+  Qt5::Core
+  rclcpp::rclcpp
+  mavros_msgs::mavros_msgs__rosidl_generator_cpp
+  mavros_msgs::mavros_msgs__rosidl_typesupport_cpp
 )
 
 # Install the executable
 install(TARGETS
   waypoint
   topic_data
+  topicsUI
   DESTINATION lib/${PROJECT_NAME}
 )
 
