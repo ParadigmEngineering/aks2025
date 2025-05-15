@@ -113,7 +113,7 @@ private:
         // double waypoint_y = (waypoint_longitude - origin_longitude_) * meters_per_degree_;
 
         // Calculate heading
-        double heading = calculate_waypoints_angle(current_latitude_, current_longitude_, waypoint_latitude, waypoint_longitude, next_waypoint_latitude, next_waypoint_longitude, last_kart_latitude, last_kart_longitude, last_waypoint_latitude, last_waypoint_longitude, next2_waypoint_latitude, next2_waypoint_longitude);
+        double heading = calculate_waypoints_angle();
 
         // Convert heading to quaternion
         tf2::Quaternion quaternion;
@@ -147,32 +147,18 @@ private:
     }
 
 
-    double calculate_waypoints_angle(double cur_lat, double cur_lon, double way_lat, double way_lon, double way_next_lat, double way_next_lon, double last_kart_lat, double last_kart_lon, double last_way_lat, double last_way_lon, double way_next2_lat, double way_next2_lon)
+    double calculate_waypoints_angle()
     {
 
-        // testing euclidan distance buffer to point
-        // double next_dist = sqrt(pow(cur_lat - way_lat,2) + pow(cur_lon - way_lon, 2));
-        // double last_dist = sqrt(pow(cur_lat - last_way_lat,2) + pow(cur_lon - last_way_lon, 2));
-        // RCLCPP_INFO(this->get_logger(), "way_lat: %.8f, way_lon: %8.f", way_lat, way_lon);
-        // RCLCPP_INFO(this->get_logger(), "last_way_lat: %.8f, last_way_lon: %8.f", last_way_lat, last_way_lon);
-        // RCLCPP_INFO(this->get_logger(), "Euclidan next_dist: %.8f", next_dist);
-        // RCLCPP_INFO(this->get_logger(), "Euclidan last_dist: %.8f", last_dist);
-        // Numbers arbitrary choice of distance by inspection
-        // if (next_dist > 0.0003 && last_dist < 0.00015){
-        //     return 0;
-        // }
+        // Algo 1 - probably not the best when hyperparameters of 2 are good - Jason
 
-        // double way_vec_lon = (way_next_lon - way_lon);
-        // double way_vec_lat = (way_next_lat - way_lat);
+        // double way_vec_lon = (next_waypoint_longitude - waypoint_longitude);
+        // double way_vec_lat = (next_waypoint_latitude - waypoint_latitude);
 
-        // double kart_vec_lon = (cur_lon - last_kart_lon);
-        // double kart_vec_lat = (cur_lat - last_kart_lat);
-
-        // double next_vec_lon = (way_next2_lon - way_next_lon);
-        // double next_vec_lat = (way_next2_lon - way_next_lat);
+        // double kart_vec_lon = (current_longitude_ - last_kart_longitude);
+        // double kart_vec_lat = (current_latitude_ - last_kart_latitude);
 
         // double wayCrossKart_norm = abs((way_vec_lon*kart_vec_lat) - (way_vec_lat*kart_vec_lon));
-
 
         // // cos (theta) = (a dot b)/(|a|*|b|)
         // // sin (theta) = (|a x b|)/(|a|*|b|)
@@ -181,31 +167,40 @@ private:
         // // Normalize the heading to [-pi, pi)
         // heading = normalize_angle(heading);
 
-        // if (heading < -M_PI/2){
-        //     heading = -M_PI/2;
+        // if (heading < -M_PI/7){
+        //     heading = -M_PI/7;
         // }
-        // else if (heading >= M_PI/2){
-        //     heading = M_PI/2;
+        // else if (heading >= M_PI/7){
+        //     heading = M_PI/7;
         // }
 
-        // if ((way_lat > cur_lat && way_lon < cur_lon)||(way_lat < cur_lat && way_lon > cur_lon)){
+        // if ((waypoint_latitude >  current_latitude_  && waypoint_longitude < current_longitude_)||(waypoint_latitude <  current_latitude_  && waypoint_longitude > current_longitude_)){
         //     heading = -heading;
         // }
 
-        // could have lat-lon x-y switched up
-        double alpha = atan2(way_lon-cur_lon, way_lat-cur_lat) - current_heading_;
+        //----------------------------------
+
+        //Algo 2: Probably the better once good hyperparameters - Jason
+        
+        double alpha = atan2(waypoint_longitude - current_longitude_, waypoint_latitude - current_latitude_) - current_heading_;
         alpha = normalize_angle(alpha);
-        double beta = atan2(way_next2_lon-way_next_lon, way_next2_lat-way_next_lat) - (current_heading_ + alpha);
+        
+        double beta = atan2(next2_waypoint_longitude - next_waypoint_longitude, next2_waypoint_latitude - next_waypoint_latitude) - (current_heading_ + alpha);
         beta = normalize_angle(beta);
+        
+        // Tune these, beta < 0, aplha > 0
         double K_alpha = 1.0;
         double K_beta = -1.0;
+        
         double heading = ((K_alpha * alpha) + (K_beta * beta));
-        if (heading < -M_PI/2){
-            heading = -M_PI/2;
+        
+        if (heading < -M_PI/7){
+            heading = -M_PI/7;
         }
-        else if (heading >= M_PI/2){
-            heading = M_PI/2;
+        else if (heading >= M_PI/7){
+            heading = M_PI/7;
         }
+
         return heading;
     }
 
