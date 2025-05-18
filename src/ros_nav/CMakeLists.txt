@@ -24,7 +24,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED) # Added ament_index_cpp
 find_package(mavros_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Widgets Core)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Core WebEngineWidgets)
 
 # Add executable
 add_executable(waypoint src/path_publisher.cpp)
@@ -51,7 +51,7 @@ ament_target_dependencies(topic_data
 
 # Add executable
 add_executable(topicsUI src/topicsUI.cpp)
-ament_target_dependencies(topic_data
+ament_target_dependencies(topicsUI
   rclcpp 
   std_msgs 
   geometry_msgs # If geometry_msgs is used
@@ -74,6 +74,7 @@ include_directories(
 target_link_libraries(topicsUI
   Qt5::Widgets
   Qt5::Core
+  Qt5::WebEngineWidgets
   rclcpp::rclcpp
   mavros_msgs::mavros_msgs__rosidl_generator_cpp
   mavros_msgs::mavros_msgs__rosidl_typesupport_cpp
